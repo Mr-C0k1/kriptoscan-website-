@@ -44,3 +44,20 @@ warning, traceback
 
 python3 w3scan_api_scanner.py --api https://api.indodax.com/api/ticker/btc_idr (*running dengan python untuk api scan*)
 
+(CONTOH OUPUT)
+=== W3SCAN API AUDITOR ===
+Target: https://api.indodax.com/api/ticker/btc_idr
+
+[+] Memeriksa metode HTTP:
+[=] GET - Status: 200
+[=] POST - Status: 405
+...
+
+[+] Memeriksa konfigurasi CORS:
+[-] CORS aman.
+
+[+] Memeriksa header keamanan:
+[=] Strict-Transport-Security : max-age=31536000
+[!] Header Content-Security-Policy tidak ada!
+
+
