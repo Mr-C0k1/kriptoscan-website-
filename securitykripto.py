@@ -182,3 +182,32 @@ if __name__ == "__main__":
         print("Usage: python3 securitykripto.py https://example.com")
         sys.exit(1)
     main(sys.argv[1])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  > Aktif: PUT, DELETE, PATCH
+
+[+] Mengecek CORS Misconfiguration...
+  > ⚠ CORS terbuka! Access-Control-Allow-Origin: *
+
+[+] Mengecek Security Headers...
+  > ⚠ Header hilang: Content-Security-Policy, X-Frame-Options, Strict-Transport-Security, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+  > Ditemukan: {}
+
+[+] Melakukan Error Fingerprinting...
+  > ⚠ Potensi kebocoran error ditemukan: ['error']
+
+berikan letak eror Fingerprinting, Header hilang, Mengecek CORS Misconfiguration,  Aktif: PUT, DELETE, PATCH pada script vuln di website target  
