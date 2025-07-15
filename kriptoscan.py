@@ -1,279 +1,203 @@
 #!/usr/bin/env python3
-"""
-kriptowebscan.py
-Hybrid CLI & GUI tool untuk scanning keamanan domain web tradisional + Web3/Blockchain crypto vuln.
-"""
-
-import subprocess
-import threading
-import json
-import sys
-import os
 import argparse
-import requests
 import socket
 import ssl
-from urllib.parse import urlparse
+import requests
+from urllib.parse import urlparse, urljoin, parse_qs
+import json
+import sys
+import threading
 
-# ==== Cek ketersediaan GUI ==== 
-try:
-    import tkinter as tk
-    from tkinter import ttk, filedialog, scrolledtext
-    GUI_AVAILABLE = True
-except ImportError:
-    GUI_AVAILABLE = False
+# Simple built-in subdomain wordlist kecil untuk demo
+DEFAULT_SUBDOMAIN_WORDLIST = [
+    "www", "api", "dev", "test", "blog", "shop", "mail", "webmail", "portal",
+    "admin", "beta", "m", "cdn", "static"
+]
 
-# ==== Fungsi Scan Subdomain, Recon, Bypass (fallback) ====
-def run_w3scan_modules(domain, wordlist=None, output=None, result_callback=None):
-    def run_cmd(cmd, label):
-        if result_callback:
-            result_callback(f"[+] Menjalankan {label} untuk {domain}\n")
-        try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            for line in process.stdout:
-                if result_callback:
-                    result_callback(line)
-            process.wait()
-        except FileNotFoundError:
-            if result_callback:
-                result_callback(f"[!] File {cmd[1]} tidak ditemukan, melewati...\n")
+# Port penting Web & Blockchain
+PORTS_TO_SCAN = [80, 443, 8545, 30303]
 
-    # w3scan_subdomain.py
-    cmd_subdomain = ["python3", "w3scan_subdomain.py", "--domain", domain]
-    if wordlist:
-        cmd_subdomain += ["--wordlist", wordlist]
-    if output:
-        cmd_subdomain += ["--output", output]
-    run_cmd(cmd_subdomain, "w3scan_subdomain.py")
-
-    # recon_url.py
-    cmd_recon = ["python3", "modules/recon_url.py", "--domain", domain]
-    run_cmd(cmd_recon, "recon_url.py")
-
-    # param_bypass.py
-    cmd_bypass = ["python3", "modules/param_bypass.py", "--domain", domain]
-    run_cmd(cmd_bypass, "param_bypass.py")
-
-# ==== Fungsi Deep Scan Crypto/Web3 Blockchain Vulnerabilities ====
-
-def get_ip(domain):
+def resolve_ip(domain):
     try:
         ip = socket.gethostbyname(domain)
         return ip
-    except Exception:
-        return "Tidak ditemukan"
+    except Exception as e:
+        return None
 
-def scan_open_ports(ip, ports=[80,443,8545,8546,30303,30304,7545]):
+def scan_ports(ip):
     open_ports = []
-    for port in ports:
+    for port in PORTS_TO_SCAN:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
         try:
-            result = sock.connect_ex((ip, port))
-            if result == 0:
-                open_ports.append(port)
-            sock.close()
+            sock.connect((ip, port))
+            open_ports.append(port)
         except:
             pass
+        sock.close()
     return open_ports
 
 def check_tls(domain):
+    context = ssl.create_default_context()
     try:
-        context = ssl.create_default_context()
         with socket.create_connection((domain, 443), timeout=3) as sock:
             with context.wrap_socket(sock, server_hostname=domain) as ssock:
                 cert = ssock.getpeercert()
-                # Cek validitas sertifikat (waktu, issuer)
-                return {
-                    "subject": dict(x[0] for x in cert.get('subject', [])),
-                    "issuer": dict(x[0] for x in cert.get('issuer', [])),
-                    "notBefore": cert.get('notBefore'),
-                    "notAfter": cert.get('notAfter'),
-                }
+                return cert
     except Exception as e:
         return {"error": str(e)}
 
-def detect_json_rpc(domain):
-    """
-    Cek endpoint JSON-RPC default Ethereum node
-    Biasanya di port 8545, 8546 (HTTP RPC), port 30303 (p2p)
-    """
-    ip = get_ip(domain)
-    results = []
-    for port in [8545, 8546]:
-        url = f"http://{ip}:{port}"
+def check_json_rpc(domain, open_ports):
+    found = False
+    endpoints = []
+    for port in open_ports:
+        url = f"http://{domain}:{port}"
         try:
-            r = requests.post(url, json={"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}, timeout=3)
-            if r.status_code == 200:
-                results.append({"url": url, "response": r.json()})
+            headers = {'Content-Type': 'application/json'}
+            payload = {"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}
+            r = requests.post(url, json=payload, headers=headers, timeout=3)
+            if r.status_code == 200 and "result" in r.json():
+                found = True
+                endpoints.append(url)
         except:
             pass
-    return results
+    return found, endpoints
 
-def check_etherscan_contract(domain):
-    """
-    Placeholder: Jika domain punya kontrak di Etherscan, bisa ditambahkan API scan
-    (Perlu API key & API call, jadi ini hanya dummy contoh)
-    """
-    return "Fitur belum diimplementasikan"
+def fetch_homepage(domain):
+    for scheme in ['https://', 'http://']:
+        try:
+            url = scheme + domain
+            r = requests.get(url, timeout=5)
+            if r.status_code == 200:
+                return r.text, url
+        except:
+            continue
+    return None, None
 
-def analyze_javascript_libraries(domain):
-    """
-    Ambil source homepage dan cek library JS yang mungkin rentan
-    (Contoh sederhana, cek keberadaan web3.js)
-    """
+def detect_js_blockchain_libs(html):
+    libs = {
+        "web3.js": ["web3.min.js", "Web3"],
+        "ethers.js": ["ethers.min.js", "ethers."],
+        "web3modal": ["web3modal.min.js", "Web3Modal"],
+    }
+    detected = []
+    for lib, signs in libs.items():
+        for sign in signs:
+            if sign in html:
+                detected.append(lib)
+                break
+    return detected
+
+def simple_subdomain_scan(domain, wordlist=None):
+    print("[*] Mulai simple subdomain scan")
+    found = []
+    wl = wordlist if wordlist else DEFAULT_SUBDOMAIN_WORDLIST
+    for sub in wl:
+        test_domain = f"{sub}.{domain}"
+        ip = resolve_ip(test_domain)
+        if ip:
+            print(f"  [OK] {test_domain} -> {ip}")
+            found.append({"subdomain": test_domain, "ip": ip})
+    return found
+
+def param_bypass_scan(url):
+    print("[*] Mulai simple parameter bypass scan")
     try:
-        url = domain if domain.startswith("http") else "http://" + domain
-        r = requests.get(url, timeout=5)
-        if r.status_code == 200:
-            content = r.text.lower()
-            found_libs = []
-            if "web3.js" in content or "web3.min.js" in content:
-                found_libs.append("web3.js (library blockchain Web3)")
-            if "ethers.js" in content or "ethers.min.js" in content:
-                found_libs.append("ethers.js (library blockchain Web3)")
-            # bisa tambah cek library lain dan versinya dengan regex
-            return found_libs
-    except:
+        parsed = urlparse(url)
+        if not parsed.query:
+            print("  [!] URL tidak memiliki parameter untuk di-scan")
+            return []
+        params = parse_qs(parsed.query)
+        vulnerable_params = []
+        for param in params:
+            test_url = url.replace(f"{param}={params[param][0]}", f"{param}=<script>alert(1)</script>")
+            try:
+                r = requests.get(test_url, timeout=5)
+                if "<script>alert(1)</script>" in r.text:
+                    print(f"  [Vulnerable] Parameter reflektif: {param}")
+                    vulnerable_params.append(param)
+            except:
+                continue
+        return vulnerable_params
+    except Exception as e:
+        print(f"  [!] Error scanning params: {e}")
         return []
-    return []
 
-def deep_crypto_scan(domain, result_callback=None):
-    if result_callback:
-        result_callback(f"\n=== Deep Crypto/Web3 Blockchain Vulnerability Scan untuk {domain} ===\n")
-
-    ip = get_ip(domain)
-    if result_callback:
-        result_callback(f"IP address: {ip}\n")
-
-    open_ports = scan_open_ports(ip)
-    if result_callback:
-        result_callback(f"Port terbuka umum (80,443,8545,30303,...): {open_ports}\n")
-
-    tls_info = check_tls(domain)
-    if result_callback:
-        result_callback(f"Info sertifikat TLS:\n{json.dumps(tls_info, indent=2)}\n")
-
-    json_rpc = detect_json_rpc(domain)
-    if result_callback:
-        if json_rpc:
-            result_callback(f"JSON-RPC endpoint ditemukan:\n{json.dumps(json_rpc, indent=2)}\n")
-        else:
-            result_callback("JSON-RPC endpoint tidak ditemukan atau tidak responsif.\n")
-
-    js_libs = analyze_javascript_libraries(domain)
-    if result_callback:
-        if js_libs:
-            result_callback(f"Library JavaScript blockchain ditemukan: {', '.join(js_libs)}\n")
-        else:
-            result_callback("Library JavaScript blockchain tidak ditemukan di homepage.\n")
-
-    etherscan_info = check_etherscan_contract(domain)
-    if result_callback:
-        result_callback(f"Scan kontrak di Etherscan: {etherscan_info}\n")
-
-    if result_callback:
-        result_callback("\n=== Scan selesai ===\n")
-
-# ==== GUI Mode ====
-
-if GUI_AVAILABLE:
-    class CryptoWebScanGUI:
-        def __init__(self, root):
-            self.root = root
-            self.root.title("KriptoWebScan - Hybrid Scanner")
-            self.root.geometry("800x700")
-            self.create_widgets()
-
-        def create_widgets(self):
-            frame = ttk.Frame(self.root, padding=10)
-            frame.pack(fill=tk.BOTH, expand=True)
-
-            ttk.Label(frame, text="Target Domain / URL:").grid(row=0, column=0, sticky=tk.W)
-            self.domain_entry = ttk.Entry(frame, width=50)
-            self.domain_entry.grid(row=0, column=1, columnspan=2, pady=5)
-
-            ttk.Label(frame, text="Wordlist (opsional):").grid(row=1, column=0, sticky=tk.W)
-            self.wordlist_entry = ttk.Entry(frame, width=50)
-            self.wordlist_entry.grid(row=1, column=1, pady=5)
-            ttk.Button(frame, text="Browse", command=self.browse_wordlist).grid(row=1, column=2)
-
-            ttk.Label(frame, text="Output file JSON (opsional):").grid(row=2, column=0, sticky=tk.W)
-            self.output_entry = ttk.Entry(frame, width=50)
-            self.output_entry.grid(row=2, column=1, pady=5)
-            ttk.Button(frame, text="Browse", command=self.browse_output).grid(row=2, column=2)
-
-            ttk.Button(frame, text="Mulai Scan", command=self.run_scan).grid(row=3, column=1, pady=10)
-
-            self.result_text = scrolledtext.ScrolledText(frame, wrap=tk.WORD, height=30)
-            self.result_text.grid(row=4, column=0, columnspan=3, pady=10)
-
-        def browse_wordlist(self):
-            path = filedialog.askopenfilename(title="Pilih wordlist")
-            if path:
-                self.wordlist_entry.delete(0, tk.END)
-                self.wordlist_entry.insert(0, path)
-
-        def browse_output(self):
-            path = filedialog.asksaveasfilename(title="Simpan output sebagai", defaultextension=".json")
-            if path:
-                self.output_entry.delete(0, tk.END)
-                self.output_entry.insert(0, path)
-
-        def append_text(self, text):
-            self.result_text.insert(tk.END, text)
-            self.result_text.see(tk.END)
-
-        def run_scan(self):
-            domain = self.domain_entry.get()
-            wordlist = self.wordlist_entry.get()
-            output = self.output_entry.get()
-
-            if not domain:
-                self.append_text("[!] Harap isi domain target.\n")
-                return
-
-            self.result_text.delete('1.0', tk.END)
-            self.append_text(f"[+] Mulai scan untuk domain: {domain}\n")
-
-            # Jalankan modul w3scan secara thread
-            threading.Thread(target=run_w3scan_modules, args=(domain, wordlist, output, self.append_text), daemon=True).start()
-            # Jalankan deep crypto scan juga thread
-            threading.Thread(target=deep_crypto_scan, args=(domain, self.append_text), daemon=True).start()
-
-# ==== CLI Mode ====
-
-def main_cli(args):
-    domain = args.d
-    wordlist = args.wordlist
-    output = args.output
-
-    if not domain:
-        print("[!] Harap masukkan domain target dengan opsi --d")
-        sys.exit(1)
-
-    print(f"[+] Mulai scan untuk domain: {domain}\n")
-
-    def print_callback(text):
-        print(text, end='')
-
-    run_w3scan_modules(domain, wordlist, output, print_callback)
-    deep_crypto_scan(domain, print_callback)
-
-# ==== MAIN ENTRY ====
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="KriptoWebScan - Hybrid Scanner CLI/GUI")
-    parser.add_argument("--d", help="Target domain untuk scan")
-    parser.add_argument("--wordlist", help="Wordlist opsional untuk subdomain scan")
-    parser.add_argument("--output", help="Output file JSON opsional")
+def main():
+    parser = argparse.ArgumentParser(description="kriptowebscan - Web3 & Blockchain Deep URL Scanner")
+    parser.add_argument("--d", required=True, help="Target domain (contoh: example.com)")
+    parser.add_argument("--output", help="Simpan hasil JSON ke file")
+    parser.add_argument("--wordlist", help="File wordlist untuk subdomain scan")
     args = parser.parse_args()
 
-    if args.d:
-        main_cli(args)
-    elif GUI_AVAILABLE:
-        root = tk.Tk()
-        app = CryptoWebScanGUI(root)
-        root.mainloop()
+    domain = args.d.strip().lower()
+    print(f"[+] Mulai scan untuk domain: {domain}")
+
+    ip = resolve_ip(domain)
+    if ip:
+        print(f"IP address: {ip}")
     else:
-        print("[!] Tidak ada GUI dan argumen domain ditemukan. Gunakan opsi --d example.com")
+        print("[-] Gagal resolve IP")
+        sys.exit(1)
+
+    open_ports = scan_ports(ip)
+    print(f"Port terbuka umum (80,443,8545,30303,...): {open_ports}")
+
+    tls_info = check_tls(domain)
+    print("Info sertifikat TLS:")
+    print(json.dumps(tls_info, indent=2))
+
+    found_json_rpc, endpoints = check_json_rpc(domain, open_ports)
+    if found_json_rpc:
+        print(f"JSON-RPC endpoint ditemukan di: {endpoints}")
+    else:
+        print("JSON-RPC endpoint tidak ditemukan atau tidak responsif.")
+
+    html, homepage_url = fetch_homepage(domain)
+    if html:
+        detected_libs = detect_js_blockchain_libs(html)
+        if detected_libs:
+            print(f"Library JavaScript blockchain ditemukan di homepage: {detected_libs}")
+        else:
+            print("Library JavaScript blockchain tidak ditemukan di homepage.")
+    else:
+        print("Gagal mengambil homepage untuk scan library JS.")
+
+    # Subdomain scan sederhana (tanpa wordlist eksternal)
+    wl = None
+    if args.wordlist:
+        try:
+            with open(args.wordlist, 'r') as f:
+                wl = [line.strip() for line in f if line.strip()]
+        except Exception as e:
+            print(f"  [!] Gagal baca wordlist: {e}")
+    subdomains = simple_subdomain_scan(domain, wl)
+
+    # Simple param bypass scan terhadap homepage URL jika ada query params
+    if homepage_url:
+        vulnerable_params = param_bypass_scan(homepage_url)
+    else:
+        vulnerable_params = []
+
+    # Hasil akhir
+    hasil = {
+        "domain": domain,
+        "ip": ip,
+        "open_ports": open_ports,
+        "tls_certificate": tls_info,
+        "json_rpc": {
+            "found": found_json_rpc,
+            "endpoints": endpoints
+        },
+        "js_blockchain_libs": detected_libs if html else [],
+        "subdomains_found": subdomains,
+        "param_bypass_vulnerable": vulnerable_params
+    }
+
+    if args.output:
+        with open(args.output, 'w') as out:
+            json.dump(hasil, out, indent=2)
+        print(f"[+] Hasil scan disimpan ke {args.output}")
+
+if __name__ == "__main__":
+    main()
