@@ -14,15 +14,8 @@ w3scan-api	Audit endpoint API REST/GraphQL (CORS, HTTP method abuse, header keam
 git clone https://github.com/Mr-C0k1/kriptoscan-website-/tree/main
 chmod +x install_w3scan.sh 
 ./install_w3scan.sh  (*running dengan bash*)
-# Audit smart contract Solidity
-w3scan --contract contracts/mycontract.sol
-
-# Scan endpoint RPC
-w3scan --rpc https://mainnet.infura.io/v3/KEY
-# Scan DApp untuk XSS/injection
-w3scan --dapp https://app.example.com
-# Scan UI Wallet Connect dari phishing
-w3scan --wallet https://fakeconnect.example.io
+# URL kriptowebscan - Web3 & Blockchain Deep URL Scanner
+python3  kriptoscan.py [-h] --d D [--output OUTPUT] [--wordlist WORDLIST]
 # Audit API REST trading platform
 python3 w3scan_api_scanner.py --api https://api.exchange.com/v1/user
 
@@ -42,11 +35,11 @@ exception, stack trace
 MySQL error, Mongo, Oracle
 warning, traceback
 
-python3 w3scan_api_scanner.py --api https://api.indodax.com/api/ticker/btc_idr (*running dengan python untuk api scan*)
+python3 w3scan_api_scanner.py --api https://api.example.com/api/ticker/btc_idr (*running dengan python untuk api scan*)
 
 (CONTOH OUPUT)
 === W3SCAN API AUDITOR ===
-Target: https://api.indodax.com/api/ticker/btc_idr
+Target: https://api.example.com/api/ticker/btc_idr
 
 [+] Memeriksa metode HTTP:
 [=] GET - Status: 200
