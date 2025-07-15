@@ -108,6 +108,26 @@ def error_fingerprinting(url):
     except:
         return []
 
+def vulnerability_insight(active, cors, missing, errors):
+    print("\n[+] Analisis Letak & Posisi Potensi Kerentanan:")
+    if active:
+        print("  - 🔥 [HTTP Method Injection] Terjadi di level **web server atau REST API**.")
+        print("    → Endpoint rentan: Kemungkinan `/api/`, `/admin/`, atau modul dynamic yang tidak memfilter method.")
+
+    if cors:
+        print("  - 🌐 [CORS Misconfiguration] Terjadi di **response header** server (biasanya di Nginx/Apache/backend framework).")
+        print("    → Vulnerable jika endpoint menyediakan data pribadi/session dan bisa diakses dari domain pihak ketiga.")
+
+    if missing:
+        print("  - 🛡️ [Security Header Missing] Terjadi di **konfigurasi HTTP response** (server utama atau CDN).")
+        print("    → Header hilang: CSP, HSTS, X-Frame-Options.")
+        print("    → Posisi: Root domain atau semua route karena set pada level global.")
+
+    if errors:
+        print("  - 🐞 [Error Fingerprinting] Terjadi pada **routing handler backend**.")
+        print("    → Lokasi kemungkinan: `/invalid-input-xyz` menunjukkan handler error default bocor.")
+        print("    → Mungkin berasal dari: Flask, Express.js, PHP, atau Java Spring controller.")
+
 def main(target_url):
     print(f"\n[+] Mulai scan untuk domain: {target_url}")
     parsed = urlparse(target_url)
@@ -154,6 +174,8 @@ def main(target_url):
         print(f"  > ⚠️ Potensi kebocoran error ditemukan: {errors}")
     else:
         print("  > Tidak ditemukan error yang bocor")
+
+    vulnerability_insight(active, cors, missing, errors)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
