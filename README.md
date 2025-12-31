@@ -30,10 +30,10 @@ cd kriptoscan-website"
 7. Error fingerprinting & potential API key leakage
 8. Verbose error disclosure (stack trace, DB error)
 
- '╔══════════════════════════════════════════╗
-  ║           W3SCAN-API v2.0 (2025)         ║
-  ║   Advanced Crypto Exchange API Auditor   ║
-  ╚══════════════════════════════════════════╝
+ ╔══════════════════════════════════════════╗
+ ║           W3SCAN-API v2.0 (2025)         ║
+ ║   Advanced Crypto Exchange API Auditor   ║
+ ╚══════════════════════════════════════════╝
 
 [Target] https://api.indodax.com/api
 
@@ -56,7 +56,7 @@ cd kriptoscan-website"
 [+] Mengecek GraphQL Introspection...
   [-] Introspection tidak aktif
 
-[+] Hasil lengkap disimpan ke: hasil-scan.json '
+[+] Hasil lengkap disimpan ke: hasil-scan.json 
 
 
 # DISCLAMER 
