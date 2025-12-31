@@ -55,7 +55,7 @@ cd kriptoscan-website"
 
 [+] Mengecek GraphQL Introspection...
   [-] Introspection tidak aktif
-
+  
 [+] Hasil lengkap disimpan ke: hasil-scan.json 
 
 
