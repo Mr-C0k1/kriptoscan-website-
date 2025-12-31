@@ -1,203 +1,159 @@
 #!/usr/bin/env python3
 import argparse
 import socket
-import ssl
 import requests
-from urllib.parse import urlparse, urljoin, parse_qs
+import ssl
+import datetime
 import json
-import sys
-import threading
+import urllib3
+from urllib.parse import urlparse, parse_qs
 
-# Simple built-in subdomain wordlist kecil untuk demo
-DEFAULT_SUBDOMAIN_WORDLIST = [
-    "www", "api", "dev", "test", "blog", "shop", "mail", "webmail", "portal",
-    "admin", "beta", "m", "cdn", "static"
-]
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Port penting Web & Blockchain
-PORTS_TO_SCAN = [80, 443, 8545, 30303]
+# Port rahasia & umum di ekosistem kripto/blockchain
+SECRET_PORTS = [80, 443, 8545, 8546, 8547, 8551, 30303, 6060, 8080, 8008, 5001]
+
+WEAK_CIPHERS = ["RC4", "3DES", "DES", "MD5", "SHA1", "NULL"]
 
 def resolve_ip(domain):
     try:
-        ip = socket.gethostbyname(domain)
-        return ip
-    except Exception as e:
+        return socket.gethostbyname(domain)
+    except:
         return None
 
 def scan_ports(ip):
     open_ports = []
-    for port in PORTS_TO_SCAN:
+    for port in SECRET_PORTS:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        try:
-            sock.connect((ip, port))
+        sock.settimeout(0.8)
+        if sock.connect_ex((ip, port)) == 0:
             open_ports.append(port)
-        except:
-            pass
         sock.close()
     return open_ports
 
 def check_tls(domain):
-    context = ssl.create_default_context()
     try:
+        ctx = ssl.create_default_context()
         with socket.create_connection((domain, 443), timeout=3) as sock:
-            with context.wrap_socket(sock, server_hostname=domain) as ssock:
-                cert = ssock.getpeercert()
-                return cert
-    except Exception as e:
-        return {"error": str(e)}
+            with ctx.wrap_socket(sock, server_hostname=domain) as ssock:
+                cipher = ssock.cipher()[0]
+                version = ssock.version()
+                weak = any(w in cipher.upper() for w in WEAK_CIPHERS)
+                return {"version": version, "cipher": cipher, "weak_cipher": weak}
+    except:
+        return {"error": "TLS check failed"}
 
-def check_json_rpc(domain, open_ports):
-    found = False
+def check_security_headers(domain):
+    try:
+        r = requests.get(f"https://{domain}", timeout=5, verify=False)
+        h = r.headers
+        return {
+            "missing": [k for k in ["Strict-Transport-Security", "X-Frame-Options", "X-Content-Type-Options"] if k not in h]
+        }
+    except:
+        return {"error": "Header check failed"}
+
+def check_json_rpc(domain, ports):
     endpoints = []
-    for port in open_ports:
+    for port in ports:
+        if port in [80, 443]: continue
         url = f"http://{domain}:{port}"
         try:
-            headers = {'Content-Type': 'application/json'}
             payload = {"jsonrpc":"2.0","method":"web3_clientVersion","params":[],"id":1}
-            r = requests.post(url, json=payload, headers=headers, timeout=3)
+            r = requests.post(url, json=payload, timeout=3, verify=False)
             if r.status_code == 200 and "result" in r.json():
-                found = True
-                endpoints.append(url)
+                endpoints.append({"url": url, "client": r.json().get("result")})
         except:
             pass
-    return found, endpoints
+    return endpoints
 
 def fetch_homepage(domain):
-    for scheme in ['https://', 'http://']:
+    for scheme in ["https", "http"]:
         try:
-            url = scheme + domain
-            r = requests.get(url, timeout=5)
+            r = requests.get(f"{scheme}://{domain}", timeout=5, verify=False)
             if r.status_code == 200:
-                return r.text, url
+                return r.text, f"{scheme}://{domain}"
         except:
-            continue
+            pass
     return None, None
 
-def detect_js_blockchain_libs(html):
-    libs = {
-        "web3.js": ["web3.min.js", "Web3"],
-        "ethers.js": ["ethers.min.js", "ethers."],
-        "web3modal": ["web3modal.min.js", "Web3Modal"],
-    }
-    detected = []
-    for lib, signs in libs.items():
-        for sign in signs:
-            if sign in html:
-                detected.append(lib)
-                break
-    return detected
+def detect_web3_libs(html):
+    signs = {"web3.js": "Web3", "ethers.js": "ethers.", "web3modal": "Web3Modal"}
+    return [lib for lib, sign in signs.items() if sign in html]
 
-def simple_subdomain_scan(domain, wordlist=None):
-    print("[*] Mulai simple subdomain scan")
-    found = []
-    wl = wordlist if wordlist else DEFAULT_SUBDOMAIN_WORDLIST
-    for sub in wl:
-        test_domain = f"{sub}.{domain}"
-        ip = resolve_ip(test_domain)
-        if ip:
-            print(f"  [OK] {test_domain} -> {ip}")
-            found.append({"subdomain": test_domain, "ip": ip})
-    return found
-
-def param_bypass_scan(url):
-    print("[*] Mulai simple parameter bypass scan")
-    try:
-        parsed = urlparse(url)
-        if not parsed.query:
-            print("  [!] URL tidak memiliki parameter untuk di-scan")
-            return []
-        params = parse_qs(parsed.query)
-        vulnerable_params = []
-        for param in params:
-            test_url = url.replace(f"{param}={params[param][0]}", f"{param}=<script>alert(1)</script>")
-            try:
-                r = requests.get(test_url, timeout=5)
-                if "<script>alert(1)</script>" in r.text:
-                    print(f"  [Vulnerable] Parameter reflektif: {param}")
-                    vulnerable_params.append(param)
-            except:
-                continue
-        return vulnerable_params
-    except Exception as e:
-        print(f"  [!] Error scanning params: {e}")
-        return []
+def simple_xss_check(url):
+    if "?" not in url: return []
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    vulns = []
+    payload = "<script>alert(1)</script>"
+    for param in params:
+        test_url = url.replace(f"{param}={params[param][0]}", f"{param}={payload}")
+        try:
+            r = requests.get(test_url, timeout=5, verify=False)
+            if payload in r.text:
+                vulns.append(param)
+        except:
+            pass
+    return vulns
 
 def main():
-    parser = argparse.ArgumentParser(description="kriptowebscan - Web3 & Blockchain Deep URL Scanner")
-    parser.add_argument("--d", required=True, help="Target domain (contoh: example.com)")
-    parser.add_argument("--output", help="Simpan hasil JSON ke file")
-    parser.add_argument("--wordlist", help="File wordlist untuk subdomain scan")
+    parser = argparse.ArgumentParser(description="KriptoScan - Fast Crypto & Web Vulnerability Scanner")
+    parser.add_argument("--d", required=True, help="Target domain (e.g. example.com)")
+    parser.add_argument("--output", help="Save JSON output")
     args = parser.parse_args()
 
     domain = args.d.strip().lower()
-    print(f"[+] Mulai scan untuk domain: {domain}")
+    print(f"[+] Scanning: {domain}")
 
     ip = resolve_ip(domain)
-    if ip:
-        print(f"IP address: {ip}")
-    else:
-        print("[-] Gagal resolve IP")
-        sys.exit(1)
+    if not ip:
+        print("[-] Cannot resolve domain")
+        return
+    print(f"[+] IP: {ip}")
 
     open_ports = scan_ports(ip)
-    print(f"Port terbuka umum (80,443,8545,30303,...): {open_ports}")
+    print(f"[+] Open ports: {open_ports}")
 
-    tls_info = check_tls(domain)
-    print("Info sertifikat TLS:")
-    print(json.dumps(tls_info, indent=2))
+    tls = check_tls(domain) if 443 in open_ports else {"note": "No HTTPS"}
+    print(f"[+] TLS: {tls}")
 
-    found_json_rpc, endpoints = check_json_rpc(domain, open_ports)
-    if found_json_rpc:
-        print(f"JSON-RPC endpoint ditemukan di: {endpoints}")
-    else:
-        print("JSON-RPC endpoint tidak ditemukan atau tidak responsif.")
+    headers = check_security_headers(domain)
+    print(f"[+] Missing security headers: {headers.get('missing', headers)}")
 
-    html, homepage_url = fetch_homepage(domain)
-    if html:
-        detected_libs = detect_js_blockchain_libs(html)
-        if detected_libs:
-            print(f"Library JavaScript blockchain ditemukan di homepage: {detected_libs}")
-        else:
-            print("Library JavaScript blockchain tidak ditemukan di homepage.")
-    else:
-        print("Gagal mengambil homepage untuk scan library JS.")
+    rpc_endpoints = check_json_rpc(domain, open_ports)
+    print(f"[+] Exposed JSON-RPC: {len(rpc_endpoints)} found")
+    for ep in rpc_endpoints:
+        print(f"    → {ep['url']} ({ep.get('client', 'unknown')})")
 
-    # Subdomain scan sederhana (tanpa wordlist eksternal)
-    wl = None
-    if args.wordlist:
-        try:
-            with open(args.wordlist, 'r') as f:
-                wl = [line.strip() for line in f if line.strip()]
-        except Exception as e:
-            print(f"  [!] Gagal baca wordlist: {e}")
-    subdomains = simple_subdomain_scan(domain, wl)
+    html, homepage = fetch_homepage(domain)
+    libs = detect_web3_libs(html) if html else []
+    if libs:
+        print(f"[+] Web3 libs detected: {libs}")
 
-    # Simple param bypass scan terhadap homepage URL jika ada query params
-    if homepage_url:
-        vulnerable_params = param_bypass_scan(homepage_url)
-    else:
-        vulnerable_params = []
+    xss_params = simple_xss_check(homepage) if homepage else []
+    if xss_params:
+        print(f"[+] Reflected XSS possible on params: {xss_params}")
 
-    # Hasil akhir
-    hasil = {
+    result = {
         "domain": domain,
         "ip": ip,
         "open_ports": open_ports,
-        "tls_certificate": tls_info,
-        "json_rpc": {
-            "found": found_json_rpc,
-            "endpoints": endpoints
-        },
-        "js_blockchain_libs": detected_libs if html else [],
-        "subdomains_found": subdomains,
-        "param_bypass_vulnerable": vulnerable_params
+        "tls_info": tls,
+        "missing_headers": headers.get("missing", []),
+        "exposed_rpc": rpc_endpoints,
+        "web3_libs": libs,
+        "potential_xss_params": xss_params,
+        "scanned_at": datetime.datetime.now().isoformat()
     }
 
     if args.output:
-        with open(args.output, 'w') as out:
-            json.dump(hasil, out, indent=2)
-        print(f"[+] Hasil scan disimpan ke {args.output}")
+        with open(args.output, "w") as f:
+            json.dump(result, f, indent=2)
+        print(f"[+] Results saved to {args.output}")
+    else:
+        print("\n=== SUMMARY ===")
+        print(json.dumps(result, indent=2))
 
 if __name__ == "__main__":
     main()
