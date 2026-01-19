@@ -1,64 +1,59 @@
-# W3Scan Toolkit — Pemindai Keamanan Web3 & Kriptografi (Edisi 2025)
-W3Scan adalah toolkit keamanan open-source berbasis command-line (CLI) yang dirancang khusus untuk auditor, bug bounty hunter , red team , dan developer Web3/Crypto. Toolkit ini menggabungkan berbagai modul spesialis untuk melakukan penilaian keamanan mendalam terhadap ekosistem kripto, mulai dari frontend DApp hingga RPC endpoint.
+# W3Scan Toolkit — Web3 & Crypto Security Scanner (2025 Edition)
+W3Scan is an open-source command-line (CLI) security toolkit specifically designed for auditors, bug bounty hunters, red teams, and Web3/Crypto developers. This toolkit combines multiple specialized modules to perform deep security assessments of the crypto ecosystem, ranging from DApp frontends to RPC endpoints.
 
-🛠 Modul yang Tersedia
-Modul	                      Deskripsi	                              Target Utama
-kriptoscan.py	    | Pemindai Situs Web Web3 & Blockchain	     | DApp, DEX, Pasar NFT, Antarmuka Pengguna Dompet
-securitykripto.py | Pemindai Kerentanan Kripto Tingkat Lanjut	| Frontend Web3 (Phishing, Drainer, Injection)
-w3scan-api.py     | Auditor Keamanan API Bursa Kripto         | API REST & GraphQL, Endpoint RPC
+🛠 Available Modules
+kriptoscan.py > Web3 & Blockchain Website Scanner > DApps, DEXs, NFT Marketplaces, Wallet UIs
+securitykripto.py	> Advanced Crypto Vulnerability Scanner > Web3 Frontend (Phishing, Drainers, Injections)
+w3scan-api.py  > Crypto Exchange API Security Auditor > REST & GraphQL APIs, RPC Endpoints
 
-🚀 Fitur Utama
-> Deteksi Penyalahgunaan Metode HTTP: Mendeteksi metode berbahaya yang aktif (PUT, DELETE, PATCH).
-> Kesalahan Konfigurasi CORS: identifikasi celah Allow-Credentialsdengan wildcard.
-> Analisis Header Keamanan: Mengecek tidak adanya header kritis seperti CSP, HSTS, dan X-Frame-Options.
-> Sensitive Endpoint Discovery: Brute-force ringan untuk menemukan jalur sensitif seperti /wallet, /withdraw, atau /keys.
-> Auditor GraphQL: Mengecek apakah fitur introspectionaktif yang dapat membocorkan skema database.
-> Kebocoran Informasi: Mendeteksi kebocoran API Key dan kesalahan verbose (stack trace/DB error).
+🚀 Key Features
+> HTTP Method Abuse Detection: Identifies dangerous active methods (PUT, DELETE, PATCH).
+> CORS Misconfiguration: Detects Allow-Credentials vulnerabilities combined with wildcards.
+> Security Header Analysis: Checks for the absence of critical headers such as CSP, HSTS, and X-Frame-Options.
+> Sensitive Endpoint Discovery: Light brute-force to uncover sensitive paths like /wallet, /withdraw, or /keys.
+> GraphQL Auditor: Checks if the introspection feature is enabled, which may leak database schemas.
+> Information Leakage: Detects API Key exposure and verbose error messages (stack traces/DB errors).
 
-💻 Instalasi & Penggunaan
-   1. Repositori Kloning
-      'git clone https://github.com/Mr-C0k1/kriptoscan-website-.git
-       cd kriptoscan-website'
-   2. Cara Menjalankan
-      Pastikan Anda telah menginstal Python 3.x.
-       '# Menampilkan menu bantuan
-         python3 w3scan-api.py --help
+💻 Installation & Usage
+1. Clone the Repository
+"git clone https://github.com/Mr-C0k1/kriptoscan-website-.git
+cd kriptoscan-website"
 
-        # Scan API standar
-         python3 w3scan-api.py --api https://api.target.com/api
+2. How to Run
+Ensure you have Python 3.x installed.
+"# Display help menu
+python3 w3scan-api.py --help
 
-        # Scan dengan output file JSON
-         python3 w3scan-api.py --api https://api.target.com/v3 --output hasil_scan.json'
+# Scan a standard API
+python3 w3scan-api.py --api https://api.target.com/api
 
+# Scan and save results to a JSON file
+python3 w3scan-api.py --api https://api.target.com/v3 --output scan_results.json"
 
-📊 Contoh Output (Pratinjau)
+📊 Output Example (Preview)
 
-         W3SCAN-API v2.0 (2025)           
-   Advanced Crypto Exchange API Auditor  
+           W3SCAN-API v2.0 (2025)           
+      Advanced Crypto Exchange API Auditor   
 
 [Target] https://api.target-exchange.com/api
 
-[+] Mengecek HTTP Methods yang diizinkan...
+[+] Checking allowed HTTP Methods...
   → GET     → 200
   → POST    → 200
-  [!] DELETE AKTIF → Potensi data tampering!
+  [!] DELETE ACTIVE → Potential data tampering!
 
-[+] Mengecek konfigurasi CORS...
-  [!] CORS KRITIS → Allow-Credentials + Wildcard (*)
+[+] Checking CORS configuration...
+  [!] CRITICAL CORS → Allow-Credentials + Wildcard (*)
 
-[+] Mengecek header keamanan kritis...
+[+] Checking critical security headers...
   [!] Missing → Content-Security-Policy
   [!] Missing → X-Frame-Options
 
-[+] Brute-force ringan endpoint sensitif...
+[+] Performing light brute-force on sensitive endpoints...
   → [OPEN] https://api.target-exchange.com/api/wallet
   → [PROTECTED] https://api.target-exchange.com/api/keys
 
-[+] Hasil lengkap disimpan ke: hasil-scan.json
+[+] Full results saved to: scan_results.json
 
-
-⚠️ Penafian
-Peringatan: Alat ini dibuat hanya untuk tujuan pendidikan dan pengujian keamanan yang sah ( Authorized Security Testing ). Penggunaan alat ini untuk menyerang target tanpa izin tertulis dari pemilik aset adalah tindakan ilegal. Pengembang tidak bertanggung jawab atas perlindungan atau kerusakan yang disebabkan oleh alat ini. Gunakan dengan bijak.
-
-
-
+⚠️ Disclaimer
+Warning: This tool is created for educational purposes and Authorized Security Testing only. Using this tool to attack targets without prior written consent from the asset owner is illegal. The developer assumes no liability and is not responsible for any misuse or damage caused by this tool. Use it responsibly.
