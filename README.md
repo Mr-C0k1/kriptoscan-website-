@@ -32,10 +32,9 @@ w3scan-api.py     | Auditor Keamanan API Bursa Kripto         | API REST & Graph
 
 
 📊 Contoh Output (Pratinjau)
- ╔══════════════════════════════════════════╗
- ║         W3SCAN-API v2.0 (2025)           ║
- ║    Advanced Crypto Exchange API Auditor  ║
- ╚══════════════════════════════════════════╝
+
+         W3SCAN-API v2.0 (2025)           
+   Advanced Crypto Exchange API Auditor  
 
 [Target] https://api.target-exchange.com/api
 
