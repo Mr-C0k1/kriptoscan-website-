@@ -56,4 +56,5 @@ python3 w3scan-api.py --api https://api.target.com/v3 --output scan_results.json
 [+] Full results saved to: scan_results.json
 
 ⚠️ Disclaimer
+
 Warning: This tool is created for educational purposes and Authorized Security Testing only. Using this tool to attack targets without prior written consent from the asset owner is illegal. The developer assumes no liability and is not responsible for any misuse or damage caused by this tool. Use it responsibly.
